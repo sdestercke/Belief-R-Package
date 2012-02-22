@@ -1,0 +1,1752 @@
+.packageName <- "belief"
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/BBA.R"
+BBA<-function(Group,Bba){
+
+if(abs(sum(Bba)-1)<0.000001 && (length(Group[,1])==length(Bba))){
+	return(new("BBA",group=Group,bba=Bba))
+	}
+else{
+	print("error in input arguments")
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/BBAtom.R"
+'BBAtom'<-function(BBA){	#transform BBA structure into ExtendBBA
+				#depends on binDec and ExtendBBA
+	n=length(BBA@group[1,])
+	ind=vector('numeric',2^n)
+
+	for(i in 1:length(BBA@bba)){		#decimal coding of sets and create the bba vector
+		dec=binDec(BBA@group[i,])
+		ind[dec+1]=BBA@bba[i]
+		}
+	return(ExtendBBA(BBA=ind))	#transform a bba structure into an extensive vector
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/ExtendBBA.R"
+ExtendBBA<-function(BBA=0,Bel=0,Pl=0,Q=0,B=0){
+
+s=length(BBA)
+n=log2(s)
+p=round(n)
+if(missing(BBA) && missing(Bel) && missing(Pl) && missing(Q) && missing(B)){
+	print("argument not use")
+	}
+else{
+	if(2^p==s){ #&& abs(sum(BBA)-1)<0.0000001
+		return(new("ExtendBBA",bba=BBA,bel=Bel,pl=Pl,q=Q,b=B))
+		}
+	else{
+		print("error in input vector")
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/Fuzzyset.R"
+Fuzzyset<-function(fset){
+
+boolean=TRUE
+for(i in 1:length(fset)){
+	if(fset[i]>(1+1e-8) || fset[i]<(0-1e-8)){	#check that each element is between  0 and 1
+		boolean=FALSE
+		}
+	}
+if(boolean==TRUE){
+	return(new("Fuzzyset",FuzzySet=fset))
+	}
+else{
+	print("error in input argument, membreship function val outside [0,1]")
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/Pignistic.R"
+Pignistic<-function(pig,Group){
+
+if(abs(sum(pig)-1)<0.000001 && length(Group[,1]==length(pig))){
+	return(new("Pignistic",bba=pig,group=Group))
+	}
+else{
+	print("error in input arguments")
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/SCRIPTTEST.R"
+# list of called functions: critVal, fuzzyset, fuzzytobelief, SMCagg, objOrdering, expectation
+# list of used data files: 
+#CitationnbANDage_FS_Modalities.txt  Table.txt
+#ReliabilityCharacterization.txt    TypeOfSource_FS_Modalities.txt
+#RepetitionANDModalities.txt
+
+'SCRIPTTEST' <- function(del="/"){
+
+writeFlag <- FALSE			#boolean: TRUE write files, FALSE only print results
+
+nc <- 3	#number of criteria
+#read the file that associates criteria and their characterization as fuzzy sets
+#Characterization <- data(Characterization)
+data(Characterization, package="belief")
+
+
+#paths for correspondence between criteria and reliability
+
+#read data file
+data(Table, package="belief")
+
+#number of arguments for each criterion
+nbParCrit=c(2,1,1)
+
+group_fuzzy_set=list()	#init objects
+group_bba=list()
+group_SMCag=list()
+SMCagr=list()
+name=list()
+source=Table[,1]
+
+NAMES=c("citation_number_and_age","repetitions","source_type") #Criteria names
+
+k=nrow(Table)
+
+for(i in 1:k){
+	print(Table[i,])
+	Nom=Table[i,"source_name"]
+	typ=Table[i,"source_type"]
+	Nb=Table[i,"citation_number"]
+	Age=Table[i,"age"]
+	rep=Table[i,"repetitions"]
+
+	CritVal=c(Nb,Age,rep,typ)	#vector holding criterion values
+	Nbna=0
+
+	for(p in 1:nc){					#for each criterion compute fuzzy set and reliability
+		crit=CritVal[1:nbParCrit[p]]
+		CritVal=CritVal[-(1:nbParCrit[p])]
+		if(sum(as.numeric(is.na(crit)))!=0){
+			Nbna=Nbna+1}
+		u=critVal(crit)	#for each criterion compute belief mass
+		uu=strsplit(u,"_or_")
+		if(length(uu[[1]])==2){		#particular case: two possible correspondences for reliability because of or string
+			reliab1=uu[[1]][[1]]
+			reliab2=uu[[1]][[2]]
+			Fuzzy1=pmax(Characterization[[reliab1]],Characterization[[reliab2]])	#case where or is used as in reliable or very reliable
+		} else{
+			Fuzzy1=Characterization[[u]]
+		}
+		assign(paste("Fuz",p,sep=""),Fuzzyset(Fuzzy1))
+		assign(paste("bba",p,sep=""),fuzzytobelief(get(paste("Fuz",p,sep=""))))
+		}
+
+	name1=names(Table)
+	name[[i]]=name1
+
+	Fuzzy_Set=list()
+	ENS_bba=list()
+	for(nbCrit in 1:nc){						#completion of objects
+		Fuzzy_Set=c(Fuzzy_Set,get(paste('Fuz',nbCrit,sep="")))
+		ENS_bba=c(ENS_bba,get(paste('bba',nbCrit,sep="")))
+		}
+	group_fuzzy_set[[i]]=Fuzzy_Set
+	group_bba[[i]]=ENS_bba
+
+	group_SMCag[[i]]=SMCagg(ENS_bba)		#compute SMC for criteria
+	SMCagr[[i]]=discounting(group_SMCag[[i]]$SMC,(1-Nbna/nc))#group_SMCag[[i]]$SMC#
+
+
+	if(writeFlag==TRUE){
+		writefile(group_fuzzy_set,SMCagr,group_bba,group_SMCag,del,Nom)
+	}
+}# end of loop on data rows
+if(writeFlag==TRUE){
+		writefile(group_fuzzy_set,SMCagr,group_bba,group_SMCag,del,Nom,num=2)
+		}
+
+
+K=objOrdering(SMCagr,fc=c(1,2,3,4,5))	#ordering sources
+
+size=length(K)
+print("sources sorted by decreasing reliability")
+Exp1=list()
+for(i in 1:length(SMCagr)){
+	Exp1[[i]]=expectation(SMCagr[[i]],c(1,2,3,4,5))	#compute expectations
+}
+for(i in 1:size){
+	var=paste("set: ",i,sep="")
+	print(var)
+	print(source[K[[i]]])
+	print(K[[i]])
+}
+}
+
+#see plot for fuzzy set num2 from source num1: plot(group_fuzzy_set[[num1]][[num2]])
+#see plot for bba num2 from source num1 : plot(group_bba[[num1]][[num2]])
+#see plot for SMC aggregation  num : plot(group_SMCag[[num1]]$SMC)
+#print SMC result: print(group_SMCag[[num]]$SMC)
+#print SMC detailed results: DetailSMC(group_SMCag[[num1]],group_bba[[num1]],num2)
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/SMCagg.R"
+'SMCagg'=function(List1){	#List1=list of bbas
+				#use only for ordered fuzzy sets
+				#depends: searchInterval, prodBel, SMCgen, reduceBBA, decBin
+ENS=List1
+ENS2=ENS
+k=length(ENS)
+HELP=matrix(vector('numeric',k),nrow=1)
+SUM=c(0)
+SUM2=vector('numeric',2^k)
+NB=vector('numeric',2^k)
+P=length(List1)
+if(k==1){
+	return(ENS[[1]])
+	}
+else{
+	SMC=list(group=matrix(0,ncol=length(ENS[[1]]@group[1,]),nrow=1),bba=0)
+	Nbline=c()
+	while(length(ENS2)!=0){				#gets number of rows for each BBAc
+		a=length(ENS2[[1]]@group[,2])
+		Nbline=c(Nbline,a)
+		ENS2=ENS2[-1]
+		}
+	c=vector('numeric',k)
+	c[]=1
+	c[k]=0
+	HelpSrc=c(1:k)
+	for(i in 1:prod(Nbline)){			#browse all possible combinations
+		c[k]=c[k]+1				#search for next sets to merge
+		if(c[k]>Nbline[length(c)] && i!=prod(Nbline)){
+			c=add1vec(c[1:k-1],Nbline[-k])
+			c=c(c,1)
+			}
+		if(c[k]>Nbline[length(c)] && i==prod(Nbline)){	#check that found set is correct
+			c=Nbline
+			}
+		inter=searchInterval(ENS,c)		#search from intervals issued from theta_i
+		if(length(inter)==0){				#if resulting set is limited to a singleton
+			ensemble=vector('numeric',length(ENS[[1]]@group[1,]))
+			bba=prodBel(ENS,c)
+			HelpSrc=rbind(HelpSrc,c)
+			SMC$bba=c(SMC$bba,bba)
+			SMC$group=rbind(SMC$group,ensemble)
+			}
+		else{
+		AP=SMCgen(inter)			#if resulting set is not limited to a singleton
+		intersect=AP$intersection		# SMC aggregation of current sets
+		nbinter=length(intersect)		#nbinter=nb of intervals resulting from merging
+		j=c()
+		for(h in 1:nbinter){
+			j=c(j,intersect[[h]][1]:intersect[[h]][2])	
+			}
+		intersect2=vector('numeric',length(ENS[[1]]@group[1,]))
+		intersect2[j]=j				#create set resulting from merging
+		intersect2=as.numeric(intersect2>0)
+		HelpSrc=rbind(HelpSrc,c)			#complete help field to remember source
+		SMC$group=rbind(SMC$group,intersect2)	#row number in bba to intersect
+		bba=prodBel(ENS,c)			#complete structure of future BBA object 
+		SMC$bba=c(SMC$bba,bba)			#mass of corresponding set
+		for(pl in 1:length(AP$origin)){
+				u1=vector('numeric',k)
+				u1[AP$origin[[pl]]]=1
+				HELP=rbind(HELP,u1)
+				SUM=c(SUM,bba)
+				u2=binDec(u1)
+				SUM2[u2+1]=SUM2[u2+1]+bba
+				NB[u2+1]=NB[u2+1]+1
+				}
+			}
+		}
+	SMC$group=SMC$group[-1,]			#structure is complete
+	SMC$bba=SMC$bba[-1]
+	###rajouter si SMC=une ligne
+	if(is.vector(SMC$group)){
+		SMC$group=matrix(SMC$group,nrow=1)
+		}##fin de l'ajout
+	SMC2=reducebba(BBA(Group=SMC$group,Bba=SMC$bba))#reduce bba object
+	HelpSrc=HelpSrc[-1,]
+	nb=length(SMC2@group[1,])
+	HELP2=matrix(0,ncol=k,nrow=1)
+	for(pl in 1:length(SUM2)){
+		bm=decBin(pl-1,k)
+		HELP2=rbind(HELP2,bm)
+		}
+	ORIGIN=list(CRITERE=HELP2[-1,],MASSE=SUM2,TOTAL=NB)
+		return(list(SMC=SMC2,SOURCE=ORIGIN))	#return result
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/SMCgen.R"
+'SMCgen'=function(interval){	#interval=vector with 2n elements
+				#each pair represents an interval, mass=vector of associated masses
+				#depends: intersectionint
+				#does SMC merging of several intervals
+Listg=list()
+j=1
+K=c()
+
+l=length(interval)/2
+c=1:l
+source=sort(c(c,c))
+
+q=sort(interval)
+p=order(interval)
+source=source[p]
+type=p%%2	#1 for inf bound, 0 for sup bound
+
+k=1
+while(k!=0){
+	k=0
+	for(i in 1:(length(p)-1)){
+		if(q[i]==q[i+1] && type[i]<type[i+1]){
+			type[i]=1
+			type[i+1]=0
+			h=source[i]
+			source[i]=source[i+1]
+			source[i+1]=h
+			k=1
+			}
+		}
+	}
+
+for(i in (1:(length(p)-1))){
+	if(type[i]==1){
+		K=c(K,source[i])
+		if(type[i+1]==0){
+			Listg[[j]]=K
+			j=j+1
+			}
+		}
+	else{
+		ind=1:length(K)
+		ind2=as.numeric(K==source[i])
+		ind3=ind%*%ind2
+		K=K[-ind3]
+		}
+	}
+k=length(Listg)
+intersection=list()
+for(i in 1:k){
+	c=intersectionint(interval,Listg[[i]])
+	intersection[[i]]=c
+	}
+return(list(origin=Listg,intersection=intersection))
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/add1vec.R"
+'add1vec'=function(a,b){	#add 1 to a, according to b argument
+				# used by SMCagg
+k=length(a)
+kl=length(b)
+a[k]=a[k]+1
+
+if(a[k]>b[kl] && kl>0){
+	a=add1vec(a[1:(k-1)],b[-kl])
+	a=c(a,1)	
+	}
+return(a)
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/bCalc.R"
+'bCalc'<-function(BBA,vect){	#computes b(vect), vect: binary vector
+				
+	if(length(vect)!=length(BBA@group[1,])){
+		print("arguments are not valid")
+		}
+	else{
+		b=0
+		for (i in 1:length(BBA@bba)){
+			SUM=as.numeric(vect|BBA@group[i,])
+			if(sum(SUM==vect)==length(vect)){
+				b=b+BBA@bba[i]
+				}
+			}
+		}
+	return(b)
+	}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/belCalc.R"
+'belCalc'<-function(BBA,vect){		#computes belief from vect: binary vector
+						
+	if(length(vect)!=length(BBA@group[1,])){
+		print("arguments are not OK")
+		}
+	else{
+		bel=0
+		for (i in 1:length(BBA@bba)){
+			SUM=as.numeric(vect|BBA@group[i,])
+			if(sum(SUM==vect)==length(vect) && sum(BBA@group[i,])!=0){
+				bel=bel+BBA@bba[i]
+				}
+			}
+		}
+	return(bel)	#returns bel(vect)
+	}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/binDec.R"
+'binDec'<-function(vect){	#encode a binary vector into integers
+				#vect=binary vector
+k=0;
+for(i in 1:length(vect)){
+	k=k+vect[i]*2^(i-1)
+	}
+return(k)
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/classBBA.R"
+library(graphics)
+library(methods)
+setClass("BBA",
+	representation(group="matrix",bba="vector"),
+	prototype(group=matrix(0),bba=c(0)),
+	)
+setMethod("plot",signature(x="BBA"),
+	function(x,y="missing"){
+
+BBA=x
+mass_emptyset=0
+m=mtoBBA(BBAtom(BBA))
+if(sum(m@group[1,])==0){
+	mass_emptyset=m@bba[1]
+	if(length(m@bba==2)){
+		m@bba=m@bba[-1]
+		m@group=matrix(m@group[-1,],nrow=1)
+		}
+	else{
+		m@group=m@group[-1,]
+		m@bba=m@bba[-1]
+	}
+	}
+t=length(m@group[1,])
+k=length(m@bba)
+
+print(mass_emptyset)
+
+COLOR=c("blue","red","green")
+
+matplot(c(-0.5,5.5),c(0,1.5),type='n',xlab=expression(theta),ylab='m',main='BBA representation')#+0.1*k
+abline(1,0,col='red')
+H=0
+abline(1,0)
+for(j in 1:length(m@bba)){
+	Nb=c()
+	c=c(m@group[j,],0)
+	Vect=(1:(t+1))*c
+	for(i in 1:t){
+		if(c[i]==0){
+			Nb=c()
+			}
+		else{
+			Nb=c(Nb,Vect[i])
+			if(i!=7 && c[i+1]==0){
+				a=min(Nb)-0.5
+				b=max(Nb)+0.5
+				rect(a,H,b,H+m@bba[j],col=COLOR[(j%%3)+1])
+				
+				}
+			}	
+		}
+	H=H+m@bba[j]
+	}
+# use plotmath symbols to display symbols
+legend(-0.5,1.25,c(expression(paste("mass(",symbol("\306"),")=")),mass_emptyset))
+
+
+
+})
+setMethod("show",signature("BBA"),
+	function(object){
+
+if(length(object@bba)>=1){
+	taille=length(object@group[1,])
+	theta=c()
+	y=1:taille
+	for(i in 1:taille){
+		theta=c(theta,paste("theta ",i,sep=""))
+		}
+	taille=length(object@bba)
+	for(i in 1:taille){
+		ENS=theta[y*object@group[i,]]
+		mass=object@bba[i]
+		m=paste("Subset",paste("{",ENS,"}",collapse=""),"has a mass equal to", mass , collapse="")
+		print(m)
+		}
+	}
+else{
+print("m was not calculated")
+	}
+})
+setMethod("summary",signature("BBA"),
+	function(object){
+
+if(length(object@bba)!=1){
+	taille=length(object@group[1,])
+	theta=c()
+	y=1:taille
+	for(i in 1:taille){
+		theta=c(theta,paste("theta ",i,sep=""))
+		}
+	taille=length(object@bba)
+	for(i in 1:taille){
+		ENS=theta[y*object@group[i,]]
+		mass=object@bba[i]
+		bel=belCalc(object,object@group[i,])
+		pl=plausCalc(object,object@group[i,])
+		m=paste("Subset",paste("{",ENS,"}",collapse=""),"has a mass equal to", mass ," pl=",pl," bel=",bel, collapse="")
+		print(m)
+		}
+	}
+else{
+print("m was not calculated")
+	}
+})
+
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/classExtendBBA.R"
+library(graphics)
+library(methods)
+setClass("ExtendBBA",
+	representation(bba="vector",bel="vector",pl="vector",q="vector",b="vector"),
+	prototype(bba=c(0),bel=c(0),pl=c(0),q=c(0),b=c(0)),
+	)
+setMethod("plot",signature(x="ExtendBBA"),
+	function(x,y="missing"){
+
+matplot(x@bba,xlab=expression(theta),ylab='m',main="BBA")
+abline(1,0)
+
+})
+setMethod("show",signature("ExtendBBA"),
+	function(object){
+
+	if(length(object@bba)!=1){
+		print(object@bba)
+		}
+	else{
+		print("The mass vector must be computed")
+		}
+})
+setMethod("summary",signature("ExtendBBA"),
+	function(object){
+
+	if(length(object@bba)!=1){
+		pl=fmtmtopl(object)#@pl
+		bel=fmtmtobel(object)#@bel
+		DATA=data.frame(m=object@bba,pl=pl,bel=bel, stringsAsFactors = FALSE)
+		print(DATA)
+		}
+	else{
+		print("The mass vector must be computed")
+		}
+})
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/classFuzzyset.R"
+library(graphics)
+library(methods)
+setClass("Fuzzyset",
+	representation(FuzzySet="vector"),
+	prototype(FuzzySet=c(0)),
+	)
+setMethod("plot",signature(x="Fuzzyset"),
+	function(x,y="missing"){
+
+matplot(x@FuzzySet,xlab=expression(theta),ylab=expression(alpha),main="Fuzzy set representation",pch="o")
+abline(1,0)
+
+})
+setMethod("show",signature("Fuzzyset"),
+	function(object){
+	taille=length(object@FuzzySet)
+	theta=c()
+	mu=c()
+	for(i in 1:taille){
+		theta=c(theta,paste("theta",i,sep=""))
+		mu=c(mu,object@FuzzySet[i])
+		}
+	DATA=data.frame(theta=theta, "mu(theta)"= mu, stringsAsFactors = FALSE)
+	print(DATA)
+})
+setMethod("summary",signature("Fuzzyset"),
+	function(object){
+
+	taille=length(object@FuzzySet)
+	theta=c()
+	mu=c()
+	support=c()
+	kernel=c()
+	for(i in 1:taille){
+		theta=c(theta,paste("theta",i,sep=""))
+		mu=c(mu,object@FuzzySet[i])
+		if(object@FuzzySet[i]==1){
+			kernel=c(kernel,paste("theta",i,sep=""))
+			}
+		if(object@FuzzySet[i]>0){
+			support=c(support,paste("theta",i,sep=""))
+			}
+		}
+	DATA=data.frame(theta=theta, "mu(theta)"= mu, stringsAsFactors = FALSE)
+	print(DATA)
+	DATA2=data.frame(support=support)
+	DATA3=data.frame(kernel=kernel)
+	print(DATA2)
+	print(DATA3)
+})
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/classPignistic.R"
+library(graphics)
+library(methods)
+setClass("Pignistic",
+	representation(bba="vector",group="matrix"),
+	prototype(bba=c(0),group=matrix(0)),
+	)
+setMethod("plot",signature(x="Pignistic"),
+	function(x,y="missing"){
+
+plot(x@bba,xlab=expression(theta),ylab='Proba',main="Pignistic Probability")
+abline(1,0)
+
+})
+setMethod("show",signature("Pignistic"),
+	function(object){
+	cat("Pignistic probability of a subset with ",length(object@bba)," elements \n")
+	cat(object@bba,"\n")
+})
+setMethod("summary",signature("Pignistic"),
+	function(object){
+
+cat("Pignistique d'un ensemble a ",length(object@bba), "modalites\n")
+print(object@bba)
+
+})
+
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/critval.R"
+"critVal"=function(vect){
+
+if(length(vect)==2){
+data(CitationnbANDageAge)
+u="NA"
+if(is.na(vect[1])|| is.na(vect[2])){#is.na(Nb)|| is.na(Age)){
+	u="unknown"}
+else{
+	Nbcitation=row.names(CitationnbANDageAge)
+	citclasses=strsplit(Nbcitation,"citations")
+	# last element is special (+40)
+	last=strsplit(citclasses[[length(citclasses)]][1],split="+",fixed=TRUE)[[1]][2]
+
+	# check if Nb is > last, and return last element position if
+	# true, otherwise NA
+	nbclass=ifelse(vect[1]>last,length(citclasses),NA)
+
+	# check other classes
+	scl=sapply(citclasses,FUN=function(te){match(vect[1],eval(parse(text=te)))})
+	scl=scl[-length(citclasses)]
+	indcl=1:(length(citclasses)-1)
+	indcl=indcl[!is.na(scl)]
+	if (length(indcl)>0) nbclass=indcl[1]	
+	print(nbclass)
+
+	age=names(CitationnbANDageAge)
+	ageclasses=strsplit(age,"years")
+	last=strsplit(ageclasses[[length(ageclasses)]][1],split="+",fixed=TRUE)[[1]][2]
+	ageclass=ifelse(vect[2]>last,length(ageclasses),NA)
+	scl=sapply(ageclasses,FUN=function(te){match(vect[2],eval(parse(text=te)))})
+	scl=scl[-length(ageclasses)]
+	indcl=1:(length(ageclasses)-1)
+	indcl=indcl[!is.na(scl)]
+	if (length(indcl)>0) ageclass=indcl[1]
+	print(ageclass)
+	#age classes	
+	u=CitationnbANDageAge[nbclass,ageclass]
+	}
+return(u)
+}
+else{
+if(is.na(vect)){
+	v="unknown"
+	}
+else{
+	data(Repetition)
+	data(TypeOfSource)
+	v=NA
+	if(sum(as.numeric(names(Repetition)==vect))==1){
+	v=Repetition[1,vect]
+	}
+	if(sum(as.numeric(names(TypeOfSource)==vect))==1){
+	v=TypeOfSource[1,vect]
+	}
+	}
+return(v)
+}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/decBin.R"
+'decBin'<-function(nb,n){	#encode an integer into a binary representation
+				#nb = integer, n number of bits to use
+v=nb;			
+
+if(nb>=2^n){
+	print("arguments are not valid")
+	}
+else{
+	bin=vector('numeric',n)
+	i=1
+	while(v!=0){
+		p=v%/%2
+		if(2*p==v){
+			bin[i]=0
+			}
+		else{
+			bin[i]=1
+			}
+		v=p
+		i=i+1
+		}
+	return(bin)	#return binary encoding
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/dempsterAgg.R"
+'dempsterAgg'<-function(...){	#Dempster aggregation of n elements
+					#depends: DempsterAgg2
+					#recursive use of Dempster fusion
+x=list(...)
+Ag=x[[1]]
+n=length(x)
+x=x[-1]
+if(n==1){
+	return(x[[1]])
+	}
+else{
+	n=n-1
+	while(n!=0){
+			
+			Ag=dempsterAgg2(Ag,x[[1]])	#aggregate 2
+			#elements, remove element from list and
+			#decrement counter
+			x=x[-1]
+			n=n-1
+		}
+	return(Ag)		#returns Dempster aggregation
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/dempsterAgg2.R"
+'dempsterAgg2'=function(BBA1,BBA2){	#BBA1,BBA2 ate two BBA structures
+					#Dempster fusion of two BBA structures
+					#returns a BBA
+					#uses : binDec and mtoBBA
+List1=BBA1@group
+List2=BBA2@group
+List3=BBA1@bba
+List4=BBA2@bba
+
+n=length(List1[1,])
+List5=List1 %*% t(List2)
+dim=dim(List5)
+dec=vector('numeric',2^n)
+for(i in 1:dim[1]){
+	for(j in 1:dim[2]){
+		if(List5[i,j]!=0){
+			c=as.numeric(List1[i,]&List2[j,])
+			d=binDec(c)
+			b=List3[i]*List4[j]
+			dec[d+1]=dec[d+1]+b
+			}
+		}
+	}
+sum=sum(dec)
+dec[1]=1-sum
+Ag=mtoBBA(ExtendBBA(BBA=dec))
+return(Ag)		#Dempster aggregation of two elements
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/disAgg.R"
+'disAgg'<-function(...){	#disjunctive aggregation of n elements
+				#depends: DisAg2
+				#recursive use of disjunctive fusion
+x=list(...)
+Ag=x[[1]]
+n=length(x)
+x=x[-1]
+if(n==1){
+	return(x[[1]])
+	}
+else{
+	n=n-1
+	while(n!=0){
+			Ag=disAgg2(Ag,x[[1]])	#aggregate 2 elements,
+			x=x[-1]
+			n=n-1
+			#remove first element from x 
+			#and decrement counter by 1
+		}
+	return(Ag)	#disjunctive aggregation 
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/disAgg2.R"
+'disAgg2'=function(BBA1,BBA2){	#BBA1,BBA2 two bba structures
+				# to be merged
+				#depends: binDec, mtoBBA
+
+List1=BBA1@group
+List2=BBA2@group
+List3=BBA1@bba
+List4=BBA2@bba
+
+n=length(List1[1,])
+
+n1=length(List1[,1])
+n2=length(List2[,2])
+
+vect=vector('numeric',2^n)
+
+for(i in 1:n1){
+	for(j in 1:n2){
+		k=binDec(as.numeric(List1[i,]|List2[j,]))
+		vect[k+1]=vect[k+1]+List3[i]*List4[j]
+		}
+	}
+bba=mtoBBA(ExtendBBA(BBA=vect))
+return(bba)		# disjunctive aggregation of two elements
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/discounting.R"
+'discounting'=function(BBA,alpha){	#BBA= BBA structure, alpha in [0,1]
+					#Computes BBA weakening
+
+if(alpha<0 || alpha>1){
+	print("arguments are not OK")
+	}
+else{
+	boolean=FALSE
+	num=0					#omega
+	TOT=length(BBA@group[1,])
+	for(i in 1:length(BBA@bba)){
+		if(sum(BBA@group[i,])==TOT){	#checks if omega is present
+			boolean=TRUE
+			num=i
+			break
+			}
+		}
+	if(boolean==FALSE){			# if omega is not present, add it to BBA object with null mass
+		V=sample(1:1,TOT,TRUE)
+		BBA@group=rbind(BBA@group,V)
+		BBA@bba=c(BBA@bba,0)
+		num=length(BBA@bba)
+		}
+	BBA@bba=BBA@bba*alpha
+	BBA@bba[num]=BBA@bba[num]+(1-alpha)	#computes belief masses of focal elements
+	return(BBA)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/expectation.R"
+'expectation'<-function(BBA,c){	#c=function f(theta_i)
+				#returns bounds of BBA expectation
+				#depends on: normalization
+	if(length(c)!=length(BBA@group[1,])){	#check arguments
+		print("error in the length of c")
+		}
+	else{
+		B=normalization(BBA)
+		Einf=0
+		Esup=0
+		for(i in 1:length(B@bba)){
+			k=B@group[i,]
+			F=k*c
+			g=k==1
+			F=F[g]
+			Einf=Einf+B@bba[i]*min(F)
+			Esup=Esup+B@bba[i]*max(F)
+			}
+		return(list(Expectation_inf=Einf,Expectation_sup=Esup))	#returns inf and sup expectation as a list
+		}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbeltob.R"
+'fmtbeltob'=function(m){
+if(length(m@bel)==1){
+	print("error the argument isn't valid. bel was not calculated")
+	}
+else{
+	BEL=m
+	bel=BEL@bel
+	lm=length(bel)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@b)==1){
+			b=BEL@bel
+			x <- deparse(substitute(m))
+			assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=m@pl,B=b), pos=.GlobalEnv)
+			return(b)
+			}
+		else{
+			return(m@b)
+			}
+		}
+	else{
+		print("Problem in fmtbeltob: length of input vector not valid")	
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbeltom.R"
+'fmtbeltom'=function(m){
+if(length(m@bel)==1){
+	print("error the argument isn't valid. bel was not calculated")
+	}
+else{
+	BEL=m
+	BEL@b=BEL@bel
+	M=fmtbtom(BEL)
+	x<-deparse(substitute(m))
+	assign(x,ExtendBBA(BBA=M,Q=m@q,Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+	return(M)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbeltopl.R"
+'fmtbeltopl'=function(m){
+if(length(m@bel)==1){
+	print("error the argument isn't valid. bel was not calculated")
+	}
+else{
+	M=m
+	M@b=M@bel
+	pl=fmtbtopl(M)
+	x<-deparse(substitute(m))
+	assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=pl,B=m@b), pos=.GlobalEnv)
+	return(pl)
+	}
+}#
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbeltoq.R"
+'fmtbeltoq'=function(m){
+if(length(m@bel)==1){
+	print("error the argument isn't valid. bel was not calculated")
+	}
+else{
+	B=m
+	B@b=B@bel
+	q=fmtbtoq(B)
+	x<-deparse(substitute(m))
+	assign(x,ExtendBBA(BBA=m@bba,Q=q,Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+	return(q)
+	}
+}##
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbtobel.R"
+'fmtbtobel'=function(m){
+if(length(m@b)==1){
+	print("error the argument isn't valid. b was not calculated")
+	}
+else{
+	b=m@b
+	if(b[1]==1){
+		print("Problem in fmtbtobel, m( )=1")
+		}
+	else{
+		lm=length(b)
+		natoms=round(log2(lm))
+		if(2^natoms==lm){
+			if(length(m@bel)==1){
+				k=1-b[1]
+				b=(b-b[1])/k
+				b[1]=0
+				bel=b
+				x <- deparse(substitute(m))
+		  		assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+				return(bel)
+				}
+			else{
+				return(m@bel)
+				}
+			}
+		else{
+			print("Accident in fmtbtobel : length of input vector not valid")
+			}
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbtom.R"
+'fmtbtom'=function(m){
+if(length(m@b)==1){
+	print("error the argument isn't valid. b was not calculated")
+	}
+else{
+	MAT=m@b
+	lm=length(m@b)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@bba)==1){
+			for(step in 1:natoms){
+				i124=2^(step-1)
+				i842=2^(natoms+1-step)
+				i421=2^(natoms-step)
+				MAT=matrix(MAT,ncol=i842,nrow=i124)
+				MAT[,((1:i421)*2)]=MAT[,((1:i421)*2)]-MAT[,((1:i421)*2-1)]
+				}
+			M=as.vector(MAT)
+			x <- deparse(substitute(m))
+		  	assign(x,ExtendBBA(BBA=M,Q=m@q,Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+			return(M)
+			}
+		else{
+			return(m@bba)
+			}
+		}
+	else{
+		print("problem in fmtbtom: length of input vector not valid")
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbtopl.R"
+'fmtbtopl'=function(m){
+if(length(m@b)==1){
+	print("error the argument isn't valid. b was not calculated")
+	}
+else{
+	lm=length(m@b)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@pl)==1){
+			fmt=m@b[lm:1]
+			K=vector('numeric',lm)
+			K[]=m@b[lm]
+			FMT=K-fmt
+			FMT[1]=0
+			x <- deparse(substitute(m))
+		  	assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=FMT,B=m@b), pos=.GlobalEnv)
+			return(FMT)
+			}
+		else{
+			return(m@pl)
+			}
+		}
+	else{
+		print("problem in fmtbtopl: length of input vector not valid")
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtbtoq.R"
+'fmtbtoq'=function(m){
+if(length(m@b)==1){
+	print("error the argument isn't valid. b was not calculated")
+	}
+else{
+	M=m
+	M@pl=fmtbtopl(M)
+	q=fmtpltoq(M)
+
+	x <- deparse(substitute(m))
+
+	assign(x,ExtendBBA(BBA=m@bba,Q=q,Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+
+	return(q)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtmtob.R"
+'fmtmtob'=function(m){
+if(length(m@bba)==1){
+	print("error the argument isn't valid. m was not calculated")
+	}
+else{
+	MAT=m@bba
+	lm=length(m@bba)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@b)==1){
+			for(step in 1:natoms){
+				i124=2^(step-1)
+				i842=2^(natoms+1-step)
+				i421=2^(natoms-step)
+				MAT=matrix(MAT,ncol=i842,nrow=i124)
+				MAT[,((1:i421)*2)]=MAT[,((1:i421)*2)]+MAT[,((1:i421)*2-1)]
+				}
+			x <- deparse(substitute(m))
+		  	assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=m@pl,B=as.vector(MAT)), pos=.GlobalEnv)
+			return(as.vector(MAT))
+			}
+		else{
+			return(m@b)
+			}
+		}
+	else{
+		print("Problem in fmtmtob: length of input vector not valid")
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtmtobel.R"
+'fmtmtobel'=function(m){
+if(length(m@bbba)==1){
+	print("error the argument isn't valid. m was not calculated")
+	}
+else{
+	bel=fmtmtob(fmtmtonm(m))
+
+	x <- deparse(substitute(m))
+
+	assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+
+	return(bel)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtmtonm.R"
+'fmtmtonm'=function(m){
+if(length(m@bba)==1){
+	print("error the argument isn't valid. m was not calculated")
+	}
+else{
+	m=m@bba
+	fmt=m/(1-m[1])
+	fmt[1]=0
+	return(ExtendBBA(BBA=fmt))
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtmtopl.R"
+'fmtmtopl'=function(m){
+if(length(m@bba)==1){
+	print("error the argument isn't valid. m was not calculated")
+	}
+else{
+	M=m
+	M@b=fmtmtob(m)
+	pl=fmtbtopl(M)
+	x <- deparse(substitute(m))
+
+	assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=pl,B=m@b), pos=.GlobalEnv)
+
+	return(pl)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtmtoq.R"
+'fmtmtoq'=function(m){
+if(length(m@bba)==1){
+	print("error the argument isn't valid. m was not calculated")
+	}
+else{
+	MAT=m@bba
+	lm=length(MAT)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@q)==1){
+			for(step in 1:natoms){
+				i124=2^(step-1)
+				i842=2^(natoms+1-step)
+				i421=2^(natoms-step)
+				MAT=matrix(MAT,ncol=i842,nrow=i124)
+				MAT[,((1:i421)*2-1)]=MAT[,((1:i421)*2-1)]+MAT[,((1:i421)*2)]
+				}
+			x <- deparse(substitute(m))
+		  	assign(x,ExtendBBA(BBA=m@bba,Q=as.vector(MAT),Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+			return(as.vector(MAT))	
+		}
+		else{
+			return(m@q)
+			}
+		}
+	else{
+		print("Problem in fmtmtoq: length of input vector not valid")
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtpltob.R"
+'fmtpltob'=function(m){
+if(length(m@pl)==1){
+	print("error the argument isn't valid. pl was not calculated")
+	}
+else{
+	PL=m
+	pl=PL@pl
+	lm=length(pl)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@b)==1){
+			fmt=pl[lm:1]
+			K=vector('numeric',lm)
+			K[]=1
+			FMT=K-fmt
+			b=FMT
+			x <- deparse(substitute(m))
+			assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=m@pl,B=b), pos=.GlobalEnv)
+			return(b)
+			}
+		else{
+			return(m@b)
+			}
+		}
+	else{
+		print("Problem in fmtpltob: length of input vector not valid")
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtpltobel.R"
+'fmtpltobel'=function(m){
+if(length(m@pl)==1){
+	print("error the argument isn't valid. pl was not calculated")
+	}
+else{
+	pl=m@pl
+	lm=length(pl)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@bel)==1){
+			fmt=fmtpltob(m)
+			if(fmt[1]<1){
+				fmt=fmt/(1-fmt[1])
+				}
+			fmt[1]=0
+			bel=fmt
+			x <- deparse(substitute(m))
+			assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+			return(bel)
+			}
+		else{
+			return(m@bel)
+			}
+		}
+		else{
+		print("Problem in fmtpltobel: length of input vector not valid")	
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtpltom.R"
+'fmtpltom'=function(m){
+if(length(m@pl)==1){
+	print("error the argument isn't valid. pl was not calculated")
+	}
+else{
+	PL=m
+	PL@b=fmtpltob(PL)
+	M=fmtbtom(PL)
+
+	x <- deparse(substitute(m))
+
+	assign(x,ExtendBBA(BBA=M,Q=m@q,Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+
+	return(M)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtpltoq.R"
+'fmtpltoq'=function(m){
+if(length(m@pl)==1){
+	print("error the argument isn't valid. pl was not calculated")
+	}
+else{
+	PL=m
+	PL@b=PL@pl
+	PL@bba=0
+	fmt=fmtbtom(PL)
+	fmt=abs(fmt)
+	fmt[1]=1
+	x <- deparse(substitute(m))
+	assign(x,ExtendBBA(BBA=m@bba,Q=fmt,Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+	return(fmt)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtqtob.R"
+'fmtqtob'=function(m){
+
+if(length(m@q)==1){
+	print("error the argument isn't valid. q was not calculated")
+	}
+else{
+	Q=m
+	Q@pl=fmtqtopl(Q)
+	b=fmtpltob(Q)
+	x <- deparse(substitute(m))
+			assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=m@pl,B=b), pos=.GlobalEnv)
+			return(b)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtqtobel.R"
+'fmtqtobel'=function(m){
+if(length(m@q)==1){
+	print("error the argument isn't valid. q was not calculated")
+	}
+else{
+	Q=m
+	Q@b=fmtqtob(Q)
+	bel=fmtbtobel(Q)
+	x <- deparse(substitute(m))
+			assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+			return(bel)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtqtom.R"
+'fmtqtom'=function(m){
+if(length(m@q)==1){
+	print("error the argument isn't valid. q was not calculated")
+	}
+else{
+	MAT=m@q
+	lm=length(MAT)
+	natoms=round(log2(lm))
+	if(2^natoms==lm){
+		if(length(m@bba)==1){
+			for (step in 1:natoms){
+				i124=2^(step-1)
+				i842=2^(natoms+1-step)
+				i421=2^(natoms-step)
+				MAT=matrix(MAT,ncol=i842,nrow=i124)
+				MAT[,((1:i421)*2-1)]=MAT[,((1:i421)*2-1)]-MAT[,((1:i421)*2)]
+				}
+			M=as.vector(MAT)
+			x <- deparse(substitute(m))
+				assign(x,ExtendBBA(BBA=M,Q=m@q,Bel=m@bel,Pl=m@pl,B=m@b), pos=.GlobalEnv)
+			return(M)
+			}
+		else{
+			return(m@bba)
+			}
+		}
+	else{
+		print("Problem in fmtqtom: length of input vector not valid")
+		}
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fmtqtopl.R"
+'fmtqtopl'=function(m){
+if(length(m@q)==1){
+	print("error the argument isn't valid. q was not calculated")
+	}
+else{
+	Q=m
+	Q@q[1]=0
+	Q@b=Q@q
+	Q@bba=0
+	pl=abs(fmtbtom(Q))
+	x <- deparse(substitute(m))
+		assign(x,ExtendBBA(BBA=m@bba,Q=m@q,Bel=m@bel,Pl=pl,B=m@b), pos=.GlobalEnv)
+		return(pl)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fromPtoBBAP.R"
+'fromPtoBBAP'<-function(pig){	#argument=output of Pignistic function
+					#depends: verifPig and verifbba
+	P=length(pig)
+	Part1=matrix(0,nrow=P,ncol=P)
+	for(i in 1:P){
+		Part1[i,i]=1
+		}
+	Pig2=BBA(Group=Part1,Bba=pig)
+		return(Pig2)	#returns pignistic as a BBA
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/fuzzytobelief.R"
+'fuzzytobelief'<-function(fuzzy){	#fuzzy=vector including alpha for each set theta1...thetaN
+					#depends: BBA
+
+#fuzzyset objects are tested at object instanciation
+	d=sort(fuzzy@FuzzySet)
+	nb=length(d)
+	e=vector('numeric',nb)
+#associate sets to the values
+	for(i in 1:nb){
+		g=as.numeric(fuzzy@FuzzySet==d[i])
+		e[i]=max((1:nb)*g)
+		fuzzy@FuzzySet[e[i]]=-1
+		}
+	E=matrix(0,ncol=nb,nrow=nb)
+	j=0
+	m=vector('numeric',nb)
+	#construct belief function with mass and corresponding set
+	for (i in 1:nb){
+		if(d[i]==0){
+			j=j+1
+			}
+		else{		
+			if(i!=1){
+				m[i]=d[i]-d[i-1]
+				T=e[i:length(d)]			#revoir le rappel des ensembles????
+				H=vector('numeric',length(d))
+				H[T]=1
+				E[i,]=H
+				}
+			else{
+				m[i]=d[i]
+				k2=e[i:length(d)]
+				k2[]=1
+				E[i,]=k2
+				}
+			}
+		}
+	#subnormalization case
+	k=sum(m[(j+1):nb])
+	nb2=nb
+	if(k<1){	#add empty set
+		p=1-k
+		m=c(m,p)
+		nb=nb+1
+		d=vector('numeric',length(d))
+		E=rbind(E,d)
+		nb2=nb-1
+		}
+	result=BBA(Group=E[m>0,,drop=FALSE],Bba=m[m>0])
+		return(result)	#transform fuzzy set into belief function
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/intersectionint.R"
+'intersectionint'=function(interval,c){	
+
+#internal - used by SMCgen
+#
+
+inf=2*c-1
+sup=2*c
+
+bound_inf=max(interval[inf])
+bound_sup=min(interval[sup])
+
+if(bound_inf>bound_sup){
+	bound_inf=0
+	bound_sup=0
+	}
+
+return(c(bound_inf,bound_sup))
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/mtoBBA.R"
+'mtoBBA'<-function(M){	#transform a BBA into a reduced structure
+m=M			#depends: decBin
+s=length(m@bba)		
+n=log2(s)
+p=round(n)
+
+if(2^p==s){
+	j=1
+	M=1:n
+	groupe=1:n
+	for(i in 1:length(m@bba)){
+		if(m@bba[i]!=0){	#detect a mass different from 0
+			M[j]=m@bba[i]	#add that mass
+			j=j+1
+			groupe=rbind(groupe,decBin(i-1,n))
+			#add corresponding binary coded element
+			}}
+	M=M[1:j-1]	#select only wanted elements
+	groupe=groupe[-1,]
+	bba=BBA(Group=groupe,Bba=M)
+	return(bba)	#transform complete vector into bba
+
+}
+else{
+	print("input vector length not valid")
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/normalization.R"
+'normalization'<-function(BBA){	#BBA list with bba and group(see definitionbba)
+				#depends: BBA
+SUM=apply(BBA@group,1,sum)	#search for empty set position (0 if not present)
+ind=0
+for (i in 1:length(SUM)){
+	if(SUM[i]==0){
+		ind=i
+		}
+	}
+
+if(ind!=0){			#normalization
+	val=BBA@bba[ind]
+	result=BBA@bba/(1-val)
+	result=result[-ind]
+	return(BBA(Bba=result,Group=matrix(BBA@group[-ind,],nrow=length(BBA@bba)-1)))
+
+	}
+else{
+	return(BBA)	#normalized bba
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/objOrdering.R"
+'objOrdering'<-function(Liste,fc){	#...=list of bbas, fc=function used to compute expectation
+
+List=Liste
+n=length(List)
+for(i in 1:n){
+	List[[i]]=expectation(List[[i]],fc)	#Compute expectation for each bba
+	}
+E=list()
+j=1
+E[[j]]=c(0)
+Num=1:length(List)
+Num2=Num
+while(length(List) != 0){			#continue until no more elements in the list
+E[[j]]=c(0)
+d=0
+	for(i in 1:length(List)){		#for each element of the list
+		dominated=FALSE
+		for(k in 1:length(List)){	#see if it is dominated
+			if((List[[i]]$Expectation_inf>List[[k]]$Expectation_inf && List[[i]]$Expectation_sup>=List[[k]]$Expectation_sup && i!=k	)||(List[[i]]$Expectation_inf>=List[[k]]$Expectation_inf && List[[i]]$Expectation_sup>List[[k]]$Expectation_sup && i!=k)){
+				dominated=TRUE  
+				break
+				}
+			}
+		if(dominated==FALSE){		#if not, class it in current group
+			E[[j]]=c(E[[j]],Num[i])
+			}
+		}
+	
+	E[[j]]=E[[j]][-1]			#remove element after it has been classified	
+	List=List[-E[[j]]]
+	
+
+	E[[j]]=Num2[E[[j]]]			#update
+	nbt=length(E[[j]])
+	for(i in 1:nbt){
+		Num2=Num2[Num2!=E[[j]][i]]
+		}
+	j=j+1
+	d=length(List[E[[j-1]]])
+	}
+E=rev(E)
+return(E)		#return list of ordered bbas
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/objOrdering2.R"
+'objOrdering2'<-function(listbba,fc){	#...=list of bbas, fc=function used to compute esperance
+
+List=listbba
+n=length(List)
+for(i in 1:n){
+	List[[i]]=expectation(List[[i]],fc)	#Compute expectation for each bba
+	}
+E=list()
+j=1
+E[[j]]=c(0)
+Num=1:length(List)
+Num2=Num
+while(length(List) != 0){			#continue until no more elements in the list
+E[[j]]=c(0)
+d=0
+	for(i in 1:length(List)){		#for each element of the list
+		dominated=FALSE
+		for(k in 1:length(List)){	#see if it is dominated
+			if((List[[i]]$Expectation_inf<List[[k]]$Expectation_inf && List[[i]]$Expectation_sup<=List[[k]]$Expectation_sup && i!=k	)||(List[[i]]$Expectation_inf<=List[[k]]$Expectation_inf && List[[i]]$Expectation_sup<List[[k]]$Expectation_sup && i!=k)){
+				dominated=TRUE
+				break
+				}
+			}
+		if(dominated==FALSE){		#if not, class it in current group
+			E[[j]]=c(E[[j]],Num[i])
+			}
+		}
+	
+	E[[j]]=E[[j]][-1]			#remove element after it has been classified
+	List=List[-E[[j]]]
+	
+
+	E[[j]]=Num2[E[[j]]]			#update
+	nbt=length(E[[j]])
+	for(i in 1:nbt){
+		Num2=Num2[Num2!=E[[j]][i]]
+		}
+	j=j+1
+	d=length(List[E[[j-1]]])
+	}
+return(E)		#return list of ordered bbas
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/objectiveTransfo.R"
+'objectiveTransfo'<-function(vect){	#vect:  vector of probabilities
+					#depends: fuzzyset
+					#transforms a probability into
+					#a fuzzy set using the
+					#objective transformation 
+taille=length(vect)
+ordre=order(vect)
+proba=vect[ordre]
+mu=cumsum(proba)
+mu=mu[ordre]
+return(Fuzzyset(mu))
+
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/pignisticCalc.R"
+'pignisticCalc'<-function(BBA){	#BBA is a BBA structure
+				#returns pignistic probabilities
+				#depends: normalization and fromPtoBBAP
+	M=normalization(BBA)
+	n=length(M@group[1,])
+	Pigni=vector('numeric',n)
+	for(i in 1:length(M@bba)){
+		c=M@group[i,]
+		m=M@bba[i]/sum(c)
+		c=c*m
+		Pigni=Pigni+c
+		}
+		return(fromPtoBBAP(Pigni))	#computes the pignistic function
+	
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/pignisticExp.R"
+'pignisticExp'<-function(BBA,c){	#BBA structure, c: vector f(theta_i)
+					#Computes pignistic Expectation
+					#depends: pignistic and expectation
+Pig=pignisticCalc(BBA)
+#P=length(Pig@bba)
+#Part1=matrix(0,nrow=P,ncol=P)
+#for(i in 1:P){
+#	Part1[i,i]=1
+#	}
+#Pigni=BBA(Group=Part1,Bba=Pig@bba)
+#Epig=expectation(Pigni,c)
+Epig=expectation(Pig,c)
+if(abs(Epig$Expectation_inf-Epig$Expectation_inf)<(min(c)*10^-6)){	#check that inf Expectation equals sup Expectation
+	Epig=Epig$Expectation_inf
+	}
+else{
+	Epig=("Error in 'pignisticExp")
+	}
+return(Epig)	#returns Expectation of Pignistic
+
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/plausCalc.R"
+'plausCalc'<-function(BBA,vect){	#computes pl(vect) vect:binary vector
+				
+	if(length(vect)!=length(BBA@group[1,])){
+		print("arguments are not valid")
+		}
+	else{
+		pl=0
+		for (i in 1:length(BBA@bba)){
+			SUM=as.numeric(vect&BBA@group[i,])
+			if(sum(SUM)!=0 ){
+				pl=pl+BBA@bba[i]
+				}
+			}
+		}
+	return(pl)	#returns pl(vect)
+	}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/plotbel.R"
+'plotbel'=function(BBA){	#input: BBA object
+				#display belief on singletons
+k=length(BBA@group[1,])
+res=vector('numeric',k)
+MAT=diag(k)
+for(i in 1:k){
+	t=belCalc(BBA,MAT[i,])
+	res=res+MAT[i,]*t	
+	}
+plot(res,main='belief function on singletons',xlab=expression(theta))
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/plotpl.R"
+'plotpl'=function(BBA){		#input:  BBA object
+				#display plausibility on singletons
+
+k=length(BBA@group[1,])
+MAT=diag(k)
+res=vector('numeric',k)
+for(i in 1:k){
+	t=plausCalc(BBA,MAT[i,])
+	res=res+MAT[i,]*t	
+	}
+plot(res,main='Plausibility on singletons',xlab=expression(theta))
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/prodBel.R"
+'prodBel'=function(list,c){	#computes the product of belief masses for a given SMC
+				#list=set of bbas
+				#c=intersection asked for
+
+E=length(list)
+P=1
+while(E!=0){
+	a=list[[1]]@bba[c[1]]	#get belief mass associated to set to be used for SMC
+	P=P*a
+	list=list[-1]
+	c=c[-1]
+	E=E-1
+	}
+#returns the  product of masses
+return(P)
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/qCalc.R"
+'qCalc'<-function(BBA,vect){	#computes q(vect) vect:binary vector
+				
+	if(length(vect)!=length(BBA@group[1,])){
+		print("arguments are not valid")
+		}
+	else{
+		q=0
+		for (i in 1:length(BBA@bba)){
+			SUM=as.numeric(BBA@group[i,]|vect)
+			if(sum(SUM==BBA@group[i,])==length(vect)){
+				q=q+BBA@bba[i]
+				}
+			}
+		}
+	return(q)	#returns q(vect)
+	}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/reducebba.R"
+'reducebba'=function(BBA){	#takes a BBA as argument
+				#depends: mtoBBA and ExtendBBA
+if(length(BBA@bba)==1){
+	return(BBA)
+	}
+else{
+	k=length(BBA@bba)
+	n=length(BBA@group[1,])
+	BBAr=vector('numeric',2^n)
+	for(i in 1:k){
+		p=binDec(BBA@group[i,])
+		BBAr[p+1]=BBAr[p+1]+BBA@bba[i]
+		}
+	BBAr=mtoBBA(ExtendBBA(BBA=BBAr))	#returns the reduced BBA
+	return(BBAr)
+	}
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/searchInterval.R"
+'searchInterval'=function(bbalist,c){	#bbalist=set of bbas, c=selection vector for each bba
+l=c()					#fonction used for SMC
+L=length(bbalist)				#searches for intersecting intervals 
+for(i in 1:L){
+	k=bbalist[[i]]@group[c[i],]
+	p=length(bbalist[[i]]@group[c[i],])
+	p=1:p
+	p=p*k
+	p=p[p!=0]
+	if(sum(p)!=0){
+		l=c(l,min(p),max(p))
+		}
+	else{
+		l=c(l)
+		}
+	}
+return(l)
+}
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/subjectiveTransfo.R"
+'subjectiveTransfo'<-function(vect){	#vect: vector of probabilities
+					#depends: fuzzyset
+					#passes from probabilities to
+					#fuzzy set using the subjective transformation
+vect2=vect
+mu=vect
+for(i in 1:length(vect)){
+	mu[i]=sum(pmin(vect[i],vect))
+	}
+return(Fuzzyset(mu))
+}
+
+#line 1 "/private/tmp/RtmpG5pOwV/R.INSTALL51c95799/belief/R/writefile.R"
+'writefile'=function(group_fuzzysets,SMCagr,group_bba,group_SMCag,del,Nom,num=1){
+#does not assign elements
+#writes results in files
+
+NAMES <- c("citation_number_and_age","repetitions","source_type")
+if(num==1){
+write.table(paste("Fuzzy sets are read by row"),paste("RES",del,"Fuzzy_set ",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=FALSE)
+for(J in 1:length(group_fuzzysets[[i]])){
+	F=group_fuzzysets[[i]][[J]]
+	write.table(paste("fuzzyset ",NAMES[J],sep=""),paste("RES",del,"Fuzzy_set ",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+	write.table(t(F@FuzzySet),paste("RES",del,"Fuzzy_set ",Nom,sep=""),col.names=FALSE,row.names=FALSE,append=TRUE)
+	}
+
+
+write.table("Belief mass is on the left; sets are reprensented in binary coding.",paste("RES",del,"SMCag ",Nom,sep=""),row.names=FALSE,col.names=FALSE,append=FALSE)
+write.table(paste("SMC of ",Nom,sep=""),paste("RES",del,"SMCag ",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+
+write.table(SMCagr[[i]]@group,paste("RES",del,"SMCag ",Nom,sep=""),row.names=FALSE,col.names=FALSE,append=TRUE)
+write.table(SMCagr[[i]]@bba,paste("RES",del,"SMCag ",Nom,sep=""),row.names=FALSE,col.names=FALSE,append=TRUE)
+
+
+
+write.table("To each criterion corresponds a bba. The last column represents belief masses; sets are written in binary coding ",paste("RES",del,"bba of ",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=FALSE)
+for(J in 1:length(group_bba[[i]])){
+	write.table(paste("bba ",NAMES[J],sep=""),paste("RES",del,"bba of ",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+	write.table(group_bba[[i]][[J]]@group,paste("RES",del,"bba of ",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+	write.table(group_bba[[i]][[J]]@bba,paste("RES",del,"bba of ",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+	}
+
+title=c()
+for(m in 1:length(group_SMCag[[i]]$SOURCE$CRITERE[1,])){
+	title=c(title,paste("critere",m,sep=""))
+	}
+title=c(title,"mass","total")
+
+res=data.frame(rbind(title,cbind(group_SMCag[[i]]$SOURCE$CRITERE,group_SMCag[[i]]$SOURCE$MASSE,group_SMCag[[i]]$SOURCE$TOTAL)),row.names=NULL,stringsAsFactors = TRUE)
+print(res)
+
+write.table("Origin of SMC. The criteria columns show the agreements between criteria, the MASS column shows the total mass for each rowand the TOTAL column shows the total number of times where the criteria agree with each other.",paste("RES",del,"SMC_origin_of ",Nom,sep=""),row.names=FALSE,col.names=TRUE,qmethod="double",append=FALSE)
+write.table(res,paste("RES",del,"SMC_origin_of",Nom,sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+print(group_SMCag[[i]]$SOURCE)
+	}
+if(num==2){
+	write.table(paste("Ordering by group with esperances"),paste("RES",del,"SMCOrdering",sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=FALSE)
+K=objOrdering(SMCagr,fc=c(1,2,3,4,5))	#ordering sources
+taille=length(K)
+print("sources ordered by reliability")
+Expectation1=list()
+for(i in 1:length(SMCagr)){
+	Expectation1[[i]]=expectation(SMCagr[[i]],c(1,2,3,4,5))	#compute esperances
+}
+for(i in 1:taille){
+	write.table(paste("groupe",i),paste("RES",del,"SMCOrdering",sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+	var=paste("set:",i,sep="")
+	print(var)
+	write.table(paste(source[K[[i]]],Expectation1[K[[i]]],sep=" "),paste("RES",del,"SMCOrdering",sep=""),row.names=FALSE,col.names=FALSE,qmethod="double",append=TRUE)
+	print(source[K[[i]]])
+	print(K[[i]])
+}
+print(Expectation1)
+	}
+}

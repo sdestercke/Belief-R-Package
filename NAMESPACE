@@ -1,0 +1,13 @@
+exportPattern("^[[:alpha:]]+")
+exportMethods(
+    "plot",
+    "show",
+    "summary" 
+)
+exportClasses(
+    "BBA",
+     "ExtendBBA",
+     "Fuzzyset",
+     "Pignistic" 
+)
+import(graphics)
