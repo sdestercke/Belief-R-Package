@@ -1,0 +1,1 @@
+\name{Table}\docType{data}\alias{Table}\title{Data used in SCRIPTTEST}\description{This data set summarise in a table different sources whose reliability is evaluated in SCRIPTTEST. }\usage{Table}\format{A data frame containing source information, used in SCRIPTTEST.}%\source{}%\references{%}\keyword{datasets}

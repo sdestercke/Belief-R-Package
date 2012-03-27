@@ -1,0 +1,15 @@
+List of things to do in the package
+
+* Add the v- and w- transformations to extendbba
+
+* Add other rules (mean, w-parametric, conjunctive, disjunctive)
+
+* Add computation of distances btw bbas
+
+* Go to multivariate modelling (extension through balooning, marginalisation, ...).
+
+* Add Dempster's rule of conditioning (for the moment, done through dempster aggregation)
+
+* Rework reordering - merge the ascending/descending parts and factorize comparisons of elements as external comparative functions (so that comparison mode become a parameter). 
+
+* Extend the package to model belief functions on real-valued intervals. 

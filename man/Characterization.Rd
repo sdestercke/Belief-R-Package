@@ -1,0 +1,1 @@
+\name{Characterization}\docType{data}\alias{Characterization}\title{Set of fuzzy sets and associated evalution for SCRIPTTEST}\description{This data set contains a table with specification of fuzzy sets. }\usage{Characterization}\format{An data frame containing linguistic assessments and fuzzy sets.}%\source{}%\references{%}\keyword{datasets}
